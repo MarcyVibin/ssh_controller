@@ -35,11 +35,12 @@ class UploadDownloadApp:
     self.root = root
     self.root.title("File Transfer")
 
-    width = 620
+    width = 600
     height = 600
     self.center_window(width, height)
 
-    self.filenames = []
+    self.filenames:list = []
+    self.foldername:str
 
     # Container for pages
     self.container = tk.Frame(root)
@@ -55,6 +56,8 @@ class UploadDownloadApp:
       self.pages[P] = page
       page.grid(row=0, column=0, sticky="nsew")
 
+    self.root.update_idletasks()
+    self.root.geometry("")
     self.show_page(UploadPage)
 
   def show_page(self, page_class):
@@ -83,9 +86,16 @@ class UploadPage(tk.Frame):
     
     tk.Label(main_frame, text="Upload Files", font=("Arial", 18)).pack(pady=10, padx=10)
 
-    #Get file button
-    self.get_file_button = tk.Button(main_frame, text="Select Files", command=self.get_files, font=font)
-    self.get_file_button.pack(pady=10)
+    # Button frame (child of main_frame)
+    button_frame = tk.Frame(main_frame)
+    button_frame.pack(pady=10)  # packed inside main_frame
+
+    # Buttons side by side using grid inside button_frame
+    self.get_file_button1 = tk.Button(button_frame, text="Select Files", command=self.get_files, font=font)
+    self.get_file_button1.grid(row=0, column=0, padx=10)
+
+    self.get_file_button2 = tk.Button(button_frame, text="Select Folder", command=self.get_folder, font=font)
+    self.get_file_button2.grid(row=0, column=1, padx=10)
 
     self.form_frame = tk.Frame(main_frame)
     self.form_frame.pack(pady=10)
@@ -151,7 +161,7 @@ class UploadPage(tk.Frame):
     # File Path
     tk.Label(self.form_frame, text="File-Path:", font=font).grid(row=4, column=0, sticky="e", padx=5, pady=5)
     self.filepath_entry = tk.Entry(self.form_frame, width=40, font=font)
-    self.filepath_entry.insert(0, "/home/marcy/main_dir/")
+    self.filepath_entry.insert(0, "/home/marcy/")
     self.filepath_entry.grid(row=4, column=1, padx=5, pady=5)
 
     # Upload Button
@@ -181,22 +191,47 @@ class UploadPage(tk.Frame):
       self.check_entries()
     self.files_text.config(state="disabled")  # read-only
 
+  def get_folder(self):
+    folder = filedialog.askdirectory()
+    self.controller.foldername = folder
+    self.files_text.config(state="normal")
+    self.files_text.delete("1.0", "end")  # clear old text
+    if folder:
+      self.files_text.insert("1.0", folder)
+      self.check_entries()
+    else:
+      self.files_text.insert("1.0", "No folder selected")
+      self.check_entries()
+    self.files_text.config(state="disabled")  # read-only
+
   def upload_files(self):
-    if not self.controller.filenames:
+    # Determine if files or a folder are selected
+    if hasattr(self.controller, "foldername") and self.controller.foldername:
+      # Upload folder
+      files_string = f'"{self.controller.foldername}"'
+      recursive_flag = "-r"
+    elif hasattr(self.controller, "filenames") and self.controller.filenames:
+      # Upload files
+      files_string = " ".join(f'"{f}"' for f in self.controller.filenames)
+      recursive_flag = ""
+    else:
+      messagebox.showwarning("No Selection", "No files or folder selected.")
       return
 
-    files_string = " ".join(f'"{f}"' for f in self.controller.filenames)
-
-    # If SSH checkbox is checked, use selected SSH host from dropdown
+    # Determine target
     if self.ssh_boolean.get():
       target_folder = f"{self.selected_host.get()}:{self.filepath_entry.get()}"
     else:
       target_folder = f"{self.username_entry.get()}@{self.server_entry.get()}:{self.filepath_entry.get()}"
 
-    pprint(files_string)
-    returnvalue = os.system(f"scp {files_string} {target_folder}")
+    # Build SCP command
+    cmd = f"scp {recursive_flag} {files_string} {target_folder}"
+    print(cmd)
+
+    # Execute SCP
+    returnvalue = os.system(cmd)
     if returnvalue == 0:
-      messagebox.showinfo("Upload Complete", "Files have been successfully uploaded.")
+      messagebox.showinfo("Upload Complete", "Files/folder have been successfully uploaded.")
       print("Finished uploading.")
     else:
       messagebox.showerror("Upload Failed", f"SCP returned error code {returnvalue}")
@@ -204,7 +239,7 @@ class UploadPage(tk.Frame):
 
 
   def check_entries(self, *args):
-    if self.username_entry.get() and self.server_entry.get() and self.filepath_entry.get() and self.controller.filenames:
+    if self.username_entry.get() and self.server_entry.get() and self.filepath_entry.get() and (self.controller.filenames or self.controller.foldername) :
       self.upload_file_button.config(state="normal")
     else:
       self.upload_file_button.config(state="disabled")
@@ -289,7 +324,7 @@ class DownloadPage(tk.Frame):
     # Remote File Path
     tk.Label(self.form_frame, text="Remote File-Path:", font=font).grid(row=4, column=0, sticky="e", padx=5, pady=5)
     self.remote_path_entry = tk.Entry(self.form_frame, width=40, font=font)
-    self.remote_path_entry.insert(0, "/home/marcy/main_dir/")
+    self.remote_path_entry.insert(0, "/home/marcy/")
     self.remote_path_entry.grid(row=4, column=1, padx=5, pady=5)
 
     # Local Save Path
@@ -314,6 +349,7 @@ class DownloadPage(tk.Frame):
     # Initialize SSH toggle state
     self.on_toggle_ssh()
 
+
   # Toggle fields depending on SSH checkbox
   def on_toggle_ssh(self):
     if self.ssh_boolean.get():
@@ -325,7 +361,7 @@ class DownloadPage(tk.Frame):
       self.server_entry.config(state="normal")
       self.ssh_dropdown.config(state="disabled")
 
-  # Placeholder for download function
+  # Download function
   def download_files(self):
     files = self.remote_path_entry.get()
     if self.ssh_boolean.get():

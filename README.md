@@ -10,3 +10,6 @@ sudo apt install python3-tk
 #### Usage
 
 Make sure to configure your config file if you want to use the shortcuts. Otherwise just fill out the blanks and click on upload/download.
+
+![Upload Page](Screenshot_1.png)
+![Download Page](Screenshot_2.png)
